@@ -1,0 +1,23 @@
+apiVersion: tekton.dev/v1alpha1
+kind: PipelineResource
+metadata:
+  name: demo-source
+  namespace: demo
+spec:
+  params:
+    - name: url
+      value: 'https://github.com/pritidesai/awesome-application'
+    - name: revision
+      value: master
+  type: git
+---
+apiVersion: tekton.dev/v1alpha1
+kind: PipelineResource
+metadata:
+  name: demo-image
+  namespace: demo
+spec:
+  params:
+    - name: url
+      value: 'docker.io/pritidesai/demo-app:latest'
+  type: image

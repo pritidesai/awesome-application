@@ -1,0 +1,88 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: demo-tt
+  namespace: demo
+spec:
+
+  params:
+  - name: git-repo-url
+  - name: git-repo-name
+  - name: git-revision
+    default: master
+
+  resourcetemplates:
+
+  - apiVersion: tekton.dev/v1alpha1
+    kind: PipelineResource
+    metadata:
+      name: demo-source-$(uid)
+      namespace: demo
+    spec:
+      params:
+      - name: url
+        value: $(tt.params.git-repo-url)
+      - name: revision
+        value: $(tt.params.git-revision)
+      - name: git-repo-name
+        value: $(tt.params.git-repo-name)
+      type: git
+
+  - apiVersion: tekton.dev/v1alpha1
+    kind: PipelineResource
+    metadata:
+      name: demo-image-$(uid)
+      namespace: demo
+    spec:
+      params:
+      - name: url
+        value: 'docker.io/pritidesai/demo-app:latest'
+      type: image
+
+  - apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    metadata:
+      generateName: demo-pipeline-run-
+      namespace: demo
+    spec:
+      serviceAccountName: demo-app-builder
+      pipelineRef:
+        name: demo-pipeline
+      resources:
+      - name: demo-source
+        resourceRef:
+          name: demo-source-$(uid)
+      - name: demo-image
+        resourceRef:
+          name: demo-image-$(uid)
+---
+
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: demo-tb
+  namespace: demo
+spec:
+  params:
+  - name: git-repo-url
+    value: $(body.repository.url)
+  - name: git-revision
+    value: $(body.head_commit.id)
+  - name: git-repo-name
+    value: $(body.repository.name)
+---
+
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  name: demo-el
+  namespace: demo
+spec:
+  serviceAccountName: demo-app-builder
+  triggers:
+    - name: demo
+      bindings:
+        - ref: demo-tb
+      template:
+        ref: demo-tt
+---

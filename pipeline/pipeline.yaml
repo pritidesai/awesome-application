@@ -1,0 +1,79 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: demo-pipeline
+  namespace: demo
+spec:
+
+  params:
+    - name: BUILDER_IMAGE
+      type: string
+      default: 'gcr.io/kaniko-project/executor:latest'
+    - name: DOCKERFILE
+      type: string
+      default: ./Dockerfile
+    - name: application-name
+      default: 'demo-app-deploy'
+    - name: flags
+      default: '--insecure'
+    - name: argocd-version
+      default: 'v2.0.1'
+
+  resources:
+    - name: demo-source
+      type: git
+    - name: demo-image
+      type: image
+
+  tasks:
+
+    - name: build-and-publish-image
+      params:
+        - name: BUILDER_IMAGE
+          value: $(params.BUILDER_IMAGE)
+        - name: DOCKERFILE
+          value: $(params.DOCKERFILE)
+      resources:
+        inputs:
+          - name: source
+            resource: demo-source
+        outputs:
+          - name: image
+            resource: demo-image
+      taskSpec:
+        params:
+          - name: BUILDER_IMAGE
+            type: string
+            default: 'gcr.io/kaniko-project/executor:latest'
+          - name: DOCKERFILE
+            type: string
+            default: ./Dockerfile
+        resources:
+          inputs:
+            - name: source
+              type: git
+          outputs:
+            - name: image
+              type: image
+        steps:
+          - name: build-app-image-with-kaniko
+            image: $(params.BUILDER_IMAGE)
+            command:
+              - /kaniko/executor
+            args:
+              - --dockerfile=$(resources.inputs.source.path)/$(params.DOCKERFILE)
+              - --destination=$(resources.outputs.image.url)
+              - --context=dir://$(resources.inputs.source.path)/
+
+    - name: argocd-sync-deployment
+      runAfter:
+        - build-and-publish-image
+      params:
+        - name: application-name
+          value: $(params.application-name)
+        - name: flags
+          value: $(params.flags)
+        - name: argocd-version
+          value: $(params.argocd-version)
+      taskRef:
+        name: argocd-task-sync-and-wait
